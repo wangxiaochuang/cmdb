@@ -11,13 +11,13 @@ VERSION_PACKAGE=github.com/marmotedu/component-base/pkg/version
 # Includes
 
 include scripts/make-rules/common.mk
-#include scripts/make-rules/golang.mk
+include scripts/make-rules/golang.mk
+include scripts/make-rules/tools.mk
 
 # Targets
 
 .PHONY: build
 build:
-	echo $(VERSION)
 	@$(MAKE) go.build
 
 .PHONY: tidy
