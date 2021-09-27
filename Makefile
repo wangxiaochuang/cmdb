@@ -20,6 +20,10 @@ include scripts/make-rules/tools.mk
 build:
 	@$(MAKE) go.build
 
+.PHONY: lint
+lint:
+	@$(MAKE) go.lint
+
 .PHONY: tidy
 tidy:
 	@$(GO) mod tidy

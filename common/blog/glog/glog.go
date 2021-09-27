@@ -281,7 +281,7 @@ func (m *moduleSpec) Get() interface{} {
 
 var errVmoduleSyntax = errors.New("syntax error: expect comma-separated list of filename=N")
 
-// Syntax: -vmodule=recordio=2,file=1,gfs*=3
+// Syntax: -vmodule=recordio=2,file=1,gfs*=3.
 func (m *moduleSpec) Set(value string) error {
 	var filter []modulePat
 	for _, pat := range strings.Split(value, ",") {
@@ -352,7 +352,7 @@ func (t *traceLocation) String() string {
 }
 
 // Get is part of the (Go 1.2) flag.Getter interface. It always returns nil for this flag type since the
-// struct is not exported
+// struct is not exported.
 func (t *traceLocation) Get() interface{} {
 	return nil
 }
@@ -891,7 +891,7 @@ const flushInterval = 30 * time.Second
 
 // flushDaemon periodically flushes the log file buffers.
 func (l *loggingT) flushDaemon() {
-	for _ = range time.NewTicker(flushInterval).C {
+	for range time.NewTicker(flushInterval).C {
 		l.lockAndFlushAll()
 	}
 }

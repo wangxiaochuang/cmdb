@@ -23,6 +23,8 @@ ifeq ($(origin GOBIN), undefined)
         GOBIN := $(GOPATH)/bin
 endif
 
+PATH := $(GOBIN):$(PATH)
+
 COMMANDS ?= $(filter-out %.md, $(wildcard ${ROOT_DIR}/cmd/*))
 BINS ?= $(foreach cmd,${COMMANDS},$(notdir ${cmd}))
 

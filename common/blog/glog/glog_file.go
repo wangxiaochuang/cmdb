@@ -35,8 +35,10 @@ import (
 )
 
 // MaxSize is the maximum size of a log file in bytes.
-var maxSizeFlag = flag.Uint64("log_max_size", 500, "Max size (MB) per file.")
-var maxSize uint64 = 0
+var (
+	maxSizeFlag        = flag.Uint64("log_max_size", 500, "Max size (MB) per file.")
+	maxSize     uint64 = 0
+)
 
 func MaxSize() uint64 {
 	if maxSize == 0 {
@@ -59,7 +61,7 @@ type fileInfo struct {
 }
 
 // fileInfoList implements Interface interface in sort. For
-// sorting a list of fileInfo
+// sorting a list of fileInfo.
 type fileInfoList []fileInfo
 
 func (b fileInfoList) Len() int           { return len(b) }
