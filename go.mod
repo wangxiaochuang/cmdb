@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/emicklei/go-restful v2.15.0+incompatible
+	github.com/go-redis/redis/v7 v7.4.1
 	github.com/juju/ratelimit v1.0.1
 	github.com/prometheus/client_golang v1.11.0
 	github.com/rs/xid v1.3.0
