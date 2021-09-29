@@ -4,15 +4,17 @@ import (
     "context"
     "fmt"
     "sync"
+    "time"
 
     "github.com/wxc/cmdb/apimachinery"
     "github.com/wxc/cmdb/apimachinery/discovery"
     "github.com/wxc/cmdb/apimachinery/util"
+    "github.com/wxc/cmdb/common"
     cc "github.com/wxc/cmdb/common/backbone/configcenter"
     "github.com/wxc/cmdb/common/backbone/service_mange/zk"
+    "github.com/wxc/cmdb/common/blog"
     "github.com/wxc/cmdb/common/errors"
     "github.com/wxc/cmdb/common/language"
-    "github.com/wxc/cmdb/common/metrics"
     "github.com/wxc/cmdb/common/metrics"
     "github.com/wxc/cmdb/common/types"
 
@@ -32,6 +34,26 @@ type BackboneParameter struct {
     ConfigPath string
     // http server parameter
     SrvInfo *types.ServerInfo
+}
+
+func newSvcManagerClient(ctx context.Context, svcManagerAddr string) (client *zk.ZkClient, err error) {
+    for retry := 0; retry < maxRetry; retry++ {
+        client = zk.NewZkClient(svcManagerAddr, 40 * time.Second)
+        if err = client.Start(); err != nil {
+            blog.Errorf("connect regdiscv [%s] failed: %v", svcManagerAddr, err)
+
+            time.Sleep(time.Second * 2)
+            continue
+        }
+
+        if err = client.Ping(); err != nil {
+            blog.Errorf("connect regdiscv [%s] failed: %v", svcManagerAddr, err)
+            time.Sleep(time.Second * 2)
+            continue
+        }
+        return
+    }
+    return
 }
 
 func validateParameter(input *BackboneParameter) error {
@@ -62,7 +84,17 @@ func NewBackbone(ctx context.Context, input *BackboneParameter) (*Engine, error)
         return nil, err
     }
 
-    metricService := metrics.NewService(metrics.Config{ProcessName: common.GetIdentification(), ProcessInstance: input.SrvInfo.Instance()})
+    _ = metrics.NewService(metrics.Config{ProcessName: common.GetIdentification(), ProcessInstance: input.SrvInfo.Instance()})
+
+    common.SetServerInfo(input.SrvInfo)
+    client, err := newSvcManagerClient(ctx, input.Regdiscv)
+    if err != nil {
+        return nil, fmt.Errorf("connect regdiscv [%s] failed: %v", input.Regdiscv, err)
+    }
+    serviceDiscovery, err := discovery.NewServiceDiscovery(client)
+    if err != nil {
+        return nil, fmt.Errorf("connect regdiscv [%s] failed: %v", input.Regdiscv, err)
+    }
     return nil, nil
 }
 

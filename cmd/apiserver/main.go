@@ -23,15 +23,15 @@ func main() {
 	blog.InitLogs()
 	defer blog.CloseLogs()
 
-        op := options.NewServerOption()
-        op.AddFlags(pflag.CommandLine)
+    op := options.NewServerOption()
+    op.AddFlags(pflag.CommandLine)
 
-        util.InitFlags()
+    util.InitFlags()
 
-        ctx, cancel := context.WithCancel(context.Background())
-        if err := app.Run(ctx, cancel, op); err != nil {
-            fmt.Fprintf(os.Stderr, "%v\n", err)
-            blog.CloseLogs()
-            os.Exit(1)
-        }
+    ctx, cancel := context.WithCancel(context.Background())
+    if err := app.Run(ctx, cancel, op); err != nil {
+        fmt.Fprintf(os.Stderr, "%v\n", err)
+        blog.CloseLogs()
+        os.Exit(1)
+    }
 }

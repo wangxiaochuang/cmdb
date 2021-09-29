@@ -1,10 +1,12 @@
 package common
 
 import (
+	"github.com/wxc/cmdb/common/types"
 	"github.com/wxc/cmdb/common/version"
 )
 
 var identification string = "unknown"
+var server *types.ServerInfo
 
 func SetIdentification(id string) {
 	if identification == "unknown" {
@@ -15,4 +17,8 @@ func SetIdentification(id string) {
 
 func GetIdentification() string {
 	return identification
+}
+
+func SetServerInfo(srvInfo *types.ServerInfo) {
+    server = srvInfo
 }

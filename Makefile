@@ -32,3 +32,7 @@ localIp := 127.0.0.1
 .PHONY: run
 run:
 	@_output/platforms/darwin/amd64/apiserver --addrport=${localIp}:8080 --logtostderr=false --log-dir=./logs --v=3 --regdiscv=127.0.0.1:2181  --enable-auth=false
+
+.PHONY: docker
+docker:
+	@docker run -d -p 8081:8090 -p 2181:2181 ccr.ccs.tencentyun.com/bk.io/cmdb-standalone:latest

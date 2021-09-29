@@ -7,7 +7,7 @@ import (
 
     "github.com/wxc/cmdb/common/auth"
     "github.com/wxc/cmdb/common/blog"
-    // "github.com/wxc/cmdb/common/version"
+    "github.com/wxc/cmdb/common/version"
 
     "github.com/spf13/pflag"
 )
@@ -33,7 +33,7 @@ func InitFlags() {
 
     // add handler if flag include --version/-v
     if *ver {
-            // version.ShowVersion()
+            version.ShowVersion()
             os.Exit(0)
     }
 

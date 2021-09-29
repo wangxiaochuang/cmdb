@@ -37,7 +37,7 @@ func Run(ctx context.Context, cancel context.CancelFunc, op *options.ServerOptio
     if err != nil {
         return fmt.Errorf("new backbone failed, err: %v", err)
     }
-    fmt.Printf("%v", engine)
+    fmt.Printf("engin: %v", engine)
 
     return nil
 }

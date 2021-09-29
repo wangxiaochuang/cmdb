@@ -1,5 +1,10 @@
 package discovery
 
+import (
+    "github.com/wxc/cmdb/common"
+    "github.com/wxc/cmdb/common/registerdiscover"
+)
+
 type ServiceManageInterface interface {
     // 判断当前进程是否为master 进程， 服务注册节点的第一个节点
     IsMaster() bool
@@ -14,4 +19,9 @@ type Interface interface {
         GetServers() ([]string, error)
         // 最新的服务节点信息存放在该channel里，可被用来>消费，以监听服务节点的变化
         GetServersChan() chan []string
+}
+
+func NewServiceDiscovery(client *zk.ZkClient) (DiscoveryInterface, error) {
+    disc := registerdiscover.NewRegDiscoverEx(client)
+
 }
