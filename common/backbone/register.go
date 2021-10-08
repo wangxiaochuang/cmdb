@@ -1,10 +1,11 @@
 package backbone
 
 import (
-    //"encoding/json"
-    //"github.com/wxc/cmdb/common/backbone/service_mange/zk"
-    //"github.com/wxc/cmdb/common/registerdiscover"
+    "encoding/json"
+    "github.com/wxc/cmdb/common/backbone/service_mange/zk"
+    "github.com/wxc/cmdb/common/registerdiscover"
     "github.com/wxc/cmdb/common/types"
+    "github.com/wxc/cmdb/framework/core/errors"
 )
 
 type ServiceRegisterInterface interface {
@@ -18,7 +19,6 @@ type ServiceRegisterInterface interface {
     ClearRegisterPath() error
 }
 
-/*
 func NewServiceRegister(client *zk.ZkClient) (ServiceRegisterInterface, error) {
     s := new(serviceRegister)
     s.client = registerdiscover.NewRegDiscoverEx(client)
@@ -55,4 +55,3 @@ func (s *serviceRegister) Cancel() {
 func (s *serviceRegister) ClearRegisterPath() error {
     return s.client.ClearRegisterPath()
 }
-*/

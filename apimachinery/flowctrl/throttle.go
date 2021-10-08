@@ -18,7 +18,7 @@ type RateLimiter interface {
 }
 
 func NewRateLimiter(qps, burst int64) RateLimiter {
-        limiter := ratelimit.NewBucketWithRate(float64(qps), burst)
+    limiter := ratelimit.NewBucketWithRate(float64(qps), burst)
     return &tokenBucket{
         limiter: limiter,
         qps:     qps,

@@ -22,3 +22,7 @@ func GetIdentification() string {
 func SetServerInfo(srvInfo *types.ServerInfo) {
     server = srvInfo
 }
+
+func GetServerInfo() *types.ServerInfo {
+    return server
+}

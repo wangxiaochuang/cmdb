@@ -3,6 +3,7 @@ package backbone
 import (
     "context"
     "fmt"
+    "net/http"
     "sync"
     "time"
 
@@ -13,10 +14,14 @@ import (
     cc "github.com/wxc/cmdb/common/backbone/configcenter"
     "github.com/wxc/cmdb/common/backbone/service_mange/zk"
     "github.com/wxc/cmdb/common/blog"
+    crd "github.com/wxc/cmdb/common/confregdiscover"
     "github.com/wxc/cmdb/common/errors"
     "github.com/wxc/cmdb/common/language"
     "github.com/wxc/cmdb/common/metrics"
     "github.com/wxc/cmdb/common/types"
+    "github.com/wxc/cmdb/storage/dal/mongo"
+    "github.com/wxc/cmdb/storage/dal/redis"
+    "github.com/wxc/cmdb/thirdparty/monitor"
 
     "github.com/rs/xid"
 )
@@ -56,6 +61,22 @@ func newSvcManagerClient(ctx context.Context, svcManagerAddr string) (client *zk
     return
 }
 
+func newConfig(ctx context.Context, srvInfo *types.ServerInfo, discovery discovery.DiscoveryInterface, apiMachineryConfig *util.APIMachineryConfig) (*Config, error) {
+    machinery, err := apimachinery.NewApiMachinery(apiMachineryConfig, discovery)
+    if err != nil {
+        return nil, fmt.Errorf("new api machinery failed, err: %v", err)
+    }
+    regPath := fmt.Sprintf("%s/%s/%s", types.CC_SERV_BASEPATH, common.GetIdentification(), srvInfo.IP)
+
+    bonC := &Config{
+        RegisterPath: regPath,
+        RegisterInfo: *srvInfo,
+        CoreAPI:      machinery,
+    }
+
+    return bonC, nil
+}
+
 func validateParameter(input *BackboneParameter) error {
     if input.Regdiscv == "" {
         return fmt.Errorf("regdiscv can not be emtpy")
@@ -84,7 +105,7 @@ func NewBackbone(ctx context.Context, input *BackboneParameter) (*Engine, error)
         return nil, err
     }
 
-    _ = metrics.NewService(metrics.Config{ProcessName: common.GetIdentification(), ProcessInstance: input.SrvInfo.Instance()})
+    metricService := metrics.NewService(metrics.Config{ProcessName: common.GetIdentification(), ProcessInstance: input.SrvInfo.Instance()})
 
     common.SetServerInfo(input.SrvInfo)
     client, err := newSvcManagerClient(ctx, input.Regdiscv)
@@ -95,7 +116,97 @@ func NewBackbone(ctx context.Context, input *BackboneParameter) (*Engine, error)
     if err != nil {
         return nil, fmt.Errorf("connect regdiscv [%s] failed: %v", input.Regdiscv, err)
     }
-    return nil, nil
+    disc, err := NewServiceRegister(client)
+    if err != nil {
+        return nil, fmt.Errorf("new service discover failed, err:%v", err)
+    }
+
+    apiMachineryConfig := &util.APIMachineryConfig{
+        QPS:       1000,
+        Burst:     2000,
+        TLSConfig: nil,
+    }
+    c, err := newConfig(ctx, input.SrvInfo, serviceDiscovery, apiMachineryConfig)
+    if err != nil {
+        return nil, err
+    }
+    engine, err := New(c, disc)
+    if err != nil {
+        return nil, fmt.Errorf("new engine failed, err: %v", err)
+    }
+    engine.client = client
+    engine.apiMachineryConfig = apiMachineryConfig
+    engine.discovery = serviceDiscovery
+    engine.ServiceManageInterface = serviceDiscovery
+    engine.srvInfo = input.SrvInfo
+    engine.metric = metricService
+
+    handler := &cc.CCHandler{
+        // 扩展这个函数， 新加传递错误
+        OnProcessUpdate:  input.ConfigUpdate,
+        OnExtraUpdate:    input.ExtraUpdate,
+        OnLanguageUpdate: engine.onLanguageUpdate,
+        OnErrorUpdate:    engine.onErrorUpdate,
+        OnMongodbUpdate:  engine.onMongodbUpdate,
+        OnRedisUpdate:    engine.onRedisUpdate,
+    }
+
+    zkdisc := crd.NewZkRegDiscover(client)
+    configCenter := &cc.ConfigCenter{
+        Type:               common.BKDefaultConfigCenter,
+        ConfigCenterDetail: zkdisc,
+    }
+    cc.AddConfigCenter(configCenter)
+
+    // get the real configuration center.
+    curentConfigCenter := cc.CurrentConfigCenter()
+
+    err = cc.NewConfigCenter(ctx, curentConfigCenter, input.ConfigPath, handler)
+    if err != nil {
+        return nil, fmt.Errorf("new config center failed, err: %v", err)
+    }
+
+    err = handleNotice(ctx, client.Client(), input.SrvInfo.Instance())
+    if err != nil {
+        return nil, fmt.Errorf("handle notice failed, err: %v", err)
+    }
+
+    if err := monitor.InitMonitor(); err != nil {
+        return nil, fmt.Errorf("init monitor failed, err: %v", err)
+    }
+
+    return engine, nil
+}
+
+func StartServer(ctx context.Context, cancel context.CancelFunc, e *Engine, HTTPHandler http.Handler, pprofEnabled bool) error {
+    e.server = Server{
+        ListenAddr:   e.srvInfo.IP,
+        ListenPort:   e.srvInfo.Port,
+        Handler:      e.Metric().HTTPMiddleware(HTTPHandler),
+        TLS:          TLSConfig{},
+        PProfEnabled: pprofEnabled,
+    }
+
+    if err := ListenAndServe(e.server, e.SvcDisc, cancel); err != nil {
+        return err
+    }
+
+    // wait for a while to see if ListenAndServe in goroutine is successful
+    // to avoid registering an invalid server address on zk
+    time.Sleep(time.Second)
+
+    return e.SvcDisc.Register(e.RegisterPath, *e.srvInfo)
+}
+
+func New(c *Config, disc ServiceRegisterInterface) (*Engine, error) {
+    return &Engine{
+        RegisterPath: c.RegisterPath,
+        CoreAPI:      c.CoreAPI,
+        SvcDisc:      disc,
+        Language:     language.NewFromCtx(language.EmptyLanguageSetting),
+        CCErr:        errors.NewFromCtx(errors.EmptyErrorsSetting),
+        CCCtx:        newCCContext(),
+    }, nil
 }
 
 type Engine struct {
@@ -135,4 +246,45 @@ func (e *Engine) Metric() *metrics.Service {
     return e.metric
 }
 
+func (e *Engine) onLanguageUpdate(previous, current map[string]language.LanguageMap) {
+    panic("onLanguageUpdate")
+}
 
+func (e *Engine) onErrorUpdate(previous, current map[string]errors.ErrorCode) {
+    panic("onErrorUpdate")
+}
+
+func (e *Engine) onMongodbUpdate(previous, current cc.ProcessConfig) {
+    panic("onMongodbUpdate")
+}
+
+func (e *Engine) onRedisUpdate(previous, current cc.ProcessConfig) {
+    panic("onRedisUpdate")
+}
+
+func (e *Engine) Ping() error {
+    return e.SvcDisc.Ping()
+}
+
+func (e *Engine) WithRedis(prefixes ...string) (redis.Config, error) {
+    // use default prefix if no prefix is specified, or use the first prefix
+    var prefix string
+    if len(prefixes) == 0 {
+        prefix = "redis"
+    } else {
+        prefix = prefixes[0]
+    }
+
+    return cc.Redis(prefix)
+}
+
+func (e *Engine) WithMongo(prefixes ...string) (mongo.Config, error) {
+    var prefix string
+    if len(prefixes) == 0 {
+        prefix = "mongodb"
+    } else {
+        prefix = prefixes[0]
+    }
+
+    return cc.Mongo(prefix)
+}

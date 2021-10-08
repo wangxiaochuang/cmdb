@@ -24,9 +24,25 @@ func main() {
 	defer blog.CloseLogs()
 
     op := options.NewServerOption()
+    //&{ServConf: {
+    //    AddrPort:    "127.0.0.1:8081",
+    //    RegDiscover: "",
+    //    RegisterIP:  "",
+    //    ExConfig:    "",
+    //    Qps:         1000,
+    //    Burst:       2000,
+    //}}
     op.AddFlags(pflag.CommandLine)
 
     util.InitFlags()
+    //&{ServConf: {
+    //    AddrPort:    "127.0.0.1:8080",
+    //    RegDiscover: "127.0.0.1:2181",
+    //    RegisterIP:  "",
+    //    ExConfig:    "",
+    //    Qps:         1000,
+    //    Burst:       2000,
+    //}}
 
     ctx, cancel := context.WithCancel(context.Background())
     if err := app.Run(ctx, cancel, op); err != nil {

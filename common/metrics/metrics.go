@@ -1,9 +1,18 @@
 package metrics
 
 import (
+    "context"
     "net/http"
+    "net/url"
+    "strconv"
     "strings"
+    "time"
+    "unicode/utf8"
 
+    "github.com/wxc/cmdb/common"
+    "github.com/wxc/cmdb/common/blog"
+    "github.com/emicklei/go-restful"
+    "github.com/mssola/user_agent"
     "github.com/prometheus/client_golang/prometheus"
     "github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -84,4 +93,94 @@ func NewService(conf Config) *Service {
         registry, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
     )
     return &srv
+}
+
+func (s *Service) Registry() prometheus.Registerer {
+    return s.registry
+}
+
+func (s *Service) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+    s.httpHandler.ServeHTTP(resp, req)
+}
+
+func (s *Service) RestfulWebService() *restful.WebService {
+    ws := restful.WebService{}
+    ws.Path("/metrics")
+    ws.Route(ws.GET("/").To(func(req *restful.Request, resp *restful.Response) {
+        blog.Info("metrics")
+        s.httpHandler.ServeHTTP(resp, req.Request)
+    }))
+
+    return &ws
+}
+
+func (s *Service) HTTPMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+        if r.RequestURI == "/metrics" || r.RequestURI == "/metrics/" {
+            s.ServeHTTP(w, r)
+            return
+        }
+
+        var uri string
+        req := r.WithContext(context.WithValue(r.Context(), KeySelectedRoutePath, &uri))
+        resp := restful.NewResponse(w)
+        before := time.Now()
+        next.ServeHTTP(resp, req)
+        if uri == "" {
+            requestUrl, err := url.ParseRequestURI(r.RequestURI)
+            if err != nil {
+                return
+            }
+            uri = requestUrl.Path
+        }
+
+        if !utf8.ValidString(uri) {
+            blog.Errorf("uri: %s not utf-8", uri)
+            return
+        }
+
+        s.requestDuration.With(s.label(LabelHandler, uri, LabelAppCode, r.Header.Get(common.BKHTTPRequestAppCode))).
+            Observe(float64(time.Since(before) / time.Millisecond))
+
+        s.requestTotal.With(s.label(
+            LabelHandler, uri,
+            LabelHTTPStatus, strconv.Itoa(resp.StatusCode()),
+            LabelOrigin, getOrigin(r.Header),
+            LabelAppCode, r.Header.Get(common.BKHTTPRequestAppCode),
+        )).Inc()
+    })
+}
+
+// RestfulMiddleWare is the http middleware for go-restful framework
+func (s *Service) RestfulMiddleWare(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+    if v := req.Request.Context().Value(KeySelectedRoutePath); v != nil {
+        if selectedRoutePath, ok := v.(*string); ok {
+            *selectedRoutePath = req.SelectedRoutePath()
+        }
+    }
+    chain.ProcessFilter(req, resp)
+}
+
+func (s *Service) label(labelKVs ...string) prometheus.Labels {
+    labels := prometheus.Labels{}
+    for index := 0; index < len(labelKVs); index += 2 {
+        labels[labelKVs[index]] = labelKVs[index+1]
+    }
+    return labels
+}
+
+func getOrigin(header http.Header) string {
+    if header.Get(common.BKHTTPOtherRequestID) != "" {
+        return "ESB"
+    }
+    if userString := header.Get("User-Agent"); userString != "" {
+        ua := user_agent.New(userString)
+        browser, _ := ua.Browser()
+        if browser != "" {
+            return "browser"
+        }
+    }
+
+    return "Unknown"
 }
